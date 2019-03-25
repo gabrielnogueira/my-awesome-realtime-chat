@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+	xmlns:h="http://java.sun.com/jsf/html"
+	xmlns:f="http://java.sun.com/jsf/core"
+	xmlns:c="http://java.sun.com/jsf/jstl/core"
+	xmlns:p="http://primefaces.org/ui"
+	xmlns:sec="http://www.springframework.org/security/tags">
+
+<h:head>
+	<title>Realtime Chat</title>
+	<h:outputStylesheet name="/css/reset.min.css" />
+	<h:outputStylesheet name="/css/bootstrap.min.css" />
+	<h:outputStylesheet name="/css/chat.css" />
+	<h:outputScript library="primefaces" name="jquery/jquery.js"
+		target="head" />
+	<h:outputScript name="/js/chat.js" />
+	<h:outputScript name="/js/letter-avatar.js" />
+	<h:outputScript name="/js/sockjs.min.js" />
+	<h:outputScript name="/js/stomp.min.js" />
+	<h:outputScript name="/js/chat-messages.js" />
+
+</h:head>
+
+<h:form>
+	<p:remoteCommand name="rcUpdateContacts" update="profile contacts"
+		action="#{chat.updateContacts}" />
+	<p:remoteCommand name="rcNewContact" update="contacts"
+		action="#{chat.newContact}" />
+	<p:remoteCommand name="rcChangeStatus" update="profile"
+		action="#{chat.changeStatus}" />
+	<p:remoteCommand name="rcReceiveNewMessage" update="contacts content"
+		action="#{chat.updateMessages}" />
+	<p:remoteCommand name="rcSelectContact" update="contacts content"
+		action="#{chat.selectContact}" />
+	<p:remoteCommand name="rcSendNewMessage" update="content"
+		action="#{chat.sendNewMessage}" />
+	<p:remoteCommand name="rcCurrentMessage"
+		action="#{chat.setCurrentMessage}" />
+</h:form>
+<h:inputHidden value="#{chat.user.id}" id="userId" />
+<h:body>
+	<div class="chat-container">
+		<p:messages id="messages" showDetail="true" closable="true">
+			<p:autoUpdate />
+		</p:messages>
+		<!-- 		<p:growl id="growl" showDetail="true" sticky="true"> -->
+		<!-- 			<p:autoUpdate /> -->
+		<!-- 		</p:growl> -->
+		<div id="frame">
+			<div id="sidepanel">
+				<h:panelGroup layout="block" id="profile">
+					<div class="wrap">
+						<p:repeat
+							value="#{[{'id':'online','value':'ONLINE'}, {'id':'offline', 'value':'OFFLINE'}, {'id':'away', 'value':'AUSENTE'},{'id':'busy', 'value':'OCUPADO'}]}"
+							var="status">
+							<p:fragment rendered="#{chat.user.status == status.value}">
+								<img avatar="#{chat.user.name}"
+									onclick="$('#status-options').toggleClass('active');capitalize()"
+									class="profile-img round ${status.id}" alt="" />
+							</p:fragment>
+						</p:repeat>
+						<p>#{chat.user.name}</p>
+						<div class="arrow down more-info expand-button" onclick='expand()'></div>
+						<div id="status-options">
+							<h:form>
+								<ul>
+									<p:repeat
+										value="#{[{'id':'online','value':'ONLINE'}, {'id':'offline', 'value':'OFFLINE'}, {'id':'away', 'value':'AUSENTE'},{'id':'busy', 'value':'OCUPADO'}]}"
+										var="status">
+										<p:fragment rendered="#{chat.user.status == status.value}">
+											<li id="status-${status.id}" class="active"
+												onclick="rcChangeStatus([{name:'newStatus', value:'#{status.value}'}]);"><span
+												class="status-circle"></span>
+												<p class="capitalize">#{status.value}</p></li>
+										</p:fragment>
+										<p:fragment rendered="#{chat.user.status != status.value}">
+											<li id="status-${status.id}"
+												onclick="rcChangeStatus([{name:'newStatus', value:'#{status.value}'}]);"><span
+												class="status-circle"></span>
+												<p class="capitalize">#{status.value}</p></li>
+										</p:fragment>
+									</p:repeat>
+								</ul>
+							</h:form>
+						</div>
+						<div id="expanded">
+							<label for="name"> Nome </label>
+							<p:inputText value="#{chat.user.name}" disabled="true" />
+							<label for="email"> E-mail </label>
+							<p:inputText value="#{chat.user.email}" disabled="true" />
+							<label for="cpf"> CPF </label>
+							<p:inputText value="#{chat.user.cpf}" disabled="true" />
+							<h:form onsubmit="this.action='#{request.contextPath}/logout';"
+								class="logout-form" styleClass="logout-button">
+								<p:commandButton value="Logout" ajax="false" />
+							</h:form>
+						</div>
+					</div>
+				</h:panelGroup>
+				<!-- 			<div id="search"> -->
+				<!-- 				<label for=""><i class="fa fa-search" aria-hidden="true"></i></label> -->
+				<!-- 				<input type="text" placeholder="Procurar..." /> -->
+				<!-- 			</div> -->
+				<h:panelGroup layout="block" id="contacts">
+					<ul>
+						<li
+							class="contact #{chat.selectedContact == 'publicChat' ? 'active' : ''}"
+							name="publicChat" onclick="selectContact(this)">
+							<div class="wrap">
+								<h:panelGroup styleClass="online" />
+								<img avatar="Public Chat" class="round contacts-img" alt="" />
+								<div class="meta">
+									<p class="name">
+										<h:outputText value="Public Chat" />
+									</p>
+									<img style="width: 20px"
+										avatar="#{chat.user != null and
+										chat.user.messages != null and chat.user.messages.size() > 0 ?
+										chat.user.messages[chat.user.messages.size()-1].userFrom.name : ''}"
+										alt="" />
+									<p class="preview">#{chat.user != null and
+										chat.user.messages != null and chat.user.messages.size() > 0 ?
+										chat.user.messages[chat.user.messages.size()-1].content : ''}</p>
+								</div>
+							</div>
+						</li>
+						<p:repeat value="#{chat.user.contacts}" var="contact">
+							<li
+								class="contact #{chat.selectedContact == contact.id ? 'active' : ''}"
+								name="#{contact.id}" onclick="selectContact(this)">
+								<div class="wrap">
+									<h:panelGroup
+										styleClass="contact-status #{contact.status == 'ONLINE' ? 'online' : contact.status == 'OCUPADO' ? 'busy' : contact.status == 'AUSENTE' ? 'away' : 'offline'}" />
+									<img avatar="#{contact.name}" class="round contacts-img" alt="" />
+									<div class="meta">
+										<p class="name">
+											<h:outputText value="#{contact.name}" />
+										</p>
+										<img style="width: 20px"
+											avatar="#{contact.messages != null and
+											contact.messages.size() > 0 ?
+											contact.messages[contact.messages.size()-1].userFrom.name : ''}"
+											alt="" />
+										<p class="preview">#{contact.messages != null and
+											contact.messages.size() > 0 ?
+											contact.messages[contact.messages.size()-1].content : ''}</p>
+									</div>
+								</div>
+							</li>
+						</p:repeat>
+					</ul>
+				</h:panelGroup>
+			</div>
+			<h:panelGroup layout="block" id="content" styleClass="content">
+				<div
+					class="chat-content #{chat.selectedContact == 'publicChat' ? 'show' : ''}"
+					name="publicChat">
+					<div class="contact-profile">
+						<img avatar="PUBLIC CHAT" class="round" alt="" />
+						<p>Public Chat</p>
+					</div>
+					<div class="messages">
+						<ul>
+							<p:repeat value="#{chat.user.messages}" var="message">
+								<p:fragment rendered="#{chat.user.id != message.userFrom.id}">
+									<li class="received"><img
+										avatar="#{message.userFrom.name}" alt="" />
+										<p>#{message.content}</p></li>
+								</p:fragment>
+								<p:fragment rendered="#{chat.user.id == message.userFrom.id}">
+									<li class="sent"><img avatar="#{chat.user.name}" alt="" />
+										<p>#{message.content}</p></li>
+								</p:fragment>
+							</p:repeat>
+						</ul>
+					</div>
+					<div class="message-input">
+						<div class="wrap">
+							<input value="#{chat.currentMessage}" id="publicChatMessage"
+								class="currentMessage"
+								onchange="rcCurrentMessage([{name:'currentMessage', value:$('#publicChatMessage').val()}])"
+								placeholder="Escreva sua mensagem..." />
+							<button type="button"
+								onclick="rcSendNewMessage([{name:'newMessage', value:$('#publicChatMessage').val()}])">Enviar</button>
+						</div>
+					</div>
+				</div>
+				<p:repeat value="#{chat.user.contacts}" var="contact">
+					<div
+						class="chat-content #{chat.selectedContact == contact.id ? 'show' : ''}"
+						name="#{contact.id}">
+						<div class="contact-profile">
+							<img avatar="#{contact.name}" class="round" alt="" />
+							<p>#{contact.name}</p>
+						</div>
+						<div class="messages">
+							<ul>
+								<p:repeat value="#{contact.messages}" var="message">
+									<p:fragment rendered="#{contact.id == message.userFrom.id}">
+										<li class="received"><img avatar="#{contact.name}" alt="" />
+											<p>#{message.content}</p></li>
+									</p:fragment>
+									<p:fragment rendered="#{chat.user.id == message.userFrom.id}">
+										<li class="sent"><img avatar="#{chat.user.name}" alt="" />
+											<p>#{message.content}</p></li>
+									</p:fragment>
+								</p:repeat>
+							</ul>
+						</div>
+						<div class="message-input">
+							<div class="wrap">
+								<input value="#{chat.currentMessage}" id="#{contact.id}Message"
+									class="currentMessage"
+									onchange="rcCurrentMessage([{name:'currentMessage', value:$('##{contact.id}Message').val()}])"
+									placeholder="Escreva sua mensagem..." />
+								<button type="button"
+									onclick="rcSendNewMessage([{name:'newMessage', value:$('##{contact.id}Message').val()}, {name:'idTo', value:#{contact.id}}])">Enviar</button>
+							</div>
+						</div>
+					</div>
+				</p:repeat>
+			</h:panelGroup>
+		</div>
+	</div>
+</h:body>
+</html>
