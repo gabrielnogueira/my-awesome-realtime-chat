@@ -1,7 +1,5 @@
 package com.montreal.chat.view.jsf.bean;
 
-import static java.util.stream.Collectors.toList;
-
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
@@ -12,7 +10,6 @@ import javax.faces.context.FacesContext;
 import javax.faces.view.ViewScoped;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.google.gson.Gson;
 import com.montreal.chat.service.UserService;
@@ -22,6 +19,15 @@ import com.montreal.chat.view.dto.ChatUserDTO;
 @ManagedBean(value = "chat")
 @ViewScoped
 public class ChatUserBean {
+	private static final String NEW_MESSAGE_RECEIVED = "newMessageReceived";
+	private static final String CURRENT_MESSAGE = "currentMessage";
+	private static final String ERRO = "Erro!";
+	private static final String ID_TO = "idTo";
+	private static final String NEW_STATUS = "newStatus";
+	private static final String CONTACT_UPDATE = "contactUpdate";
+	private static final String NEW_CONTACT = "newContact";
+	private static final String SELECTED_CONTACT = "selectedContact";
+
 	@Autowired
 	UserService userService;
 
@@ -36,10 +42,7 @@ public class ChatUserBean {
 
 	public ChatUserDTO getUser() {
 		if (user == null) {
-			ChatUserDTO authUser = getAuthUser();
-			this.user = authUser.withContacts(
-					userService.getContacts().stream().map(user -> new ChatUserDTO(user, Long.valueOf(authUser.getId()))).collect(toList()))
-					.withMessages(userService.getPublicMessages().stream().map(message -> new ChatMessageDTO().withContent(message.getContent()).fromUser(new ChatUserDTO(message.getFrom()))).collect(toList()));
+			this.user = userService.getCurrentUser();
 		}
 		return user;
 	}
@@ -52,12 +55,12 @@ public class ChatUserBean {
 		if (this.user.getContacts() == null) {
 			this.user.setContacts(new ArrayList<ChatUserDTO>());
 		}
-		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get("newContact"), ChatMessageDTO.class);
+		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get(NEW_CONTACT), ChatMessageDTO.class);
 		this.user.getContacts().add(message.getUserFrom());
 	}
 
 	public void updateContacts() {
-		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get("contactUpdate"), ChatMessageDTO.class);
+		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get(CONTACT_UPDATE), ChatMessageDTO.class);
 		if(this.user.getId().equals(message.getUserFrom().getId())) {
 			this.user.setStatus(message.getUserFrom().getStatus());
 			return;
@@ -67,20 +70,20 @@ public class ChatUserBean {
 	}
 
 	public void changeStatus() {
-		this.userService.updateUserStatus(String.valueOf(this.user.getId()), getFacesParam().get("newStatus"));
+		this.userService.updateUserStatus(String.valueOf(this.user.getId()), getFacesParam().get(NEW_STATUS));
 	}
 
 	public void sendNewMessage() {
 		try {
-			userService.newMessage(this.currentMessage, getFacesParam().get("idTo"));
+			userService.newMessage(this.currentMessage, getFacesParam().get(ID_TO));
 			this.currentMessage = "";
 		} catch (Exception e) {
-	        FacesContext.getCurrentInstance().addMessage(null, new FacesMessage(FacesMessage.SEVERITY_ERROR, "Erro!", "Essa mensagem não pode ser enviada por que contém palavras proibidas"));
+	        FacesContext.getCurrentInstance().addMessage(null, new FacesMessage(FacesMessage.SEVERITY_ERROR, ERRO, e.getMessage()));
 		}
 	}
 	
 	public void setCurrentMessage() {
-		this.currentMessage = getFacesParam().get("currentMessage");
+		this.currentMessage = getFacesParam().get(CURRENT_MESSAGE);
 	}
 	
 	public String getCurrentMessage() {
@@ -92,7 +95,7 @@ public class ChatUserBean {
 	}
 
 	public void updateMessages() {
-		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get("newMessageReceived"), ChatMessageDTO.class);
+		ChatMessageDTO message = gsonInstance.fromJson(getFacesParam().get(NEW_MESSAGE_RECEIVED), ChatMessageDTO.class);
 		if(message.getUserTo() == null) {
 			this.getUser().getMessages().add(message);
 			return;
@@ -107,7 +110,6 @@ public class ChatUserBean {
 			}
 			contact.getMessages().add(message);
 		});
-		
 	}
 	
 	public String getNewMessage() {
@@ -127,12 +129,9 @@ public class ChatUserBean {
 	}
 
 	public void selectContact() {
-		this.selectedContact = getFacesParam().get("selectedContact");
+		this.selectedContact = getFacesParam().get(SELECTED_CONTACT);
 	}
 	
-	private ChatUserDTO getAuthUser() {
-		return (ChatUserDTO) SecurityContextHolder.getContext().getAuthentication().getDetails();
-	}
 
 	private Map<String, String> getFacesParam() {
 		return FacesContext.getCurrentInstance().getExternalContext().getRequestParameterMap();

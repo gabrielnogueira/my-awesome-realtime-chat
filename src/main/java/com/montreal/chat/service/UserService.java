@@ -3,6 +3,7 @@ package com.montreal.chat.service;
 import static com.montreal.chat.common.Constants.TOPIC_PUBLIC_NEW_CONTACT;
 import static com.montreal.chat.common.Constants.TOPIC_PUBLIC_NEW_MESSAGE;
 import static com.montreal.chat.common.Constants.TOPIC_PUBLIC_UPDATE_CONTACT;
+import static java.util.stream.Collectors.toList;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,8 @@ import com.montreal.chat.view.dto.ChatUserDTO;
 @Service
 @Component
 public class UserService {
+	private static final String MESSAGE_CONTAINS_FORBIDDEN_WORDS = "Essa mensagem não pode ser enviada por que contém palavras proibidas";
+
 	@Autowired
 	UserRepository userRepository;
 
@@ -60,6 +63,13 @@ public class UserService {
 
 		return savedUser;
 	}
+	
+	public ChatUserDTO getCurrentUser() {
+			ChatUserDTO authUser = getAuthDetails();
+			return authUser.withContacts(
+					this.getContacts().stream().map(user -> new ChatUserDTO(user, Long.valueOf(authUser.getId()))).collect(toList()))
+					.withMessages(this.getPublicMessages().stream().map(message -> new ChatMessageDTO().withContent(message.getContent()).fromUser(new ChatUserDTO(message.getFrom()))).collect(toList()));
+	}
 
 	public void updateUserStatus(String userId, String newStatus) {
 		Optional<com.montreal.chat.model.entity.User> optUser = userRepository.findById(Long.parseLong(userId));
@@ -81,7 +91,7 @@ public class UserService {
 		if(forbiddenWordsRepository.findAll().stream().anyMatch(forbiddenMessage -> {
 			return chatMessage.toLowerCase().contains(forbiddenMessage.getContent().toLowerCase());
 		})) {
-			throw new Exception();
+			throw new Exception(MESSAGE_CONTAINS_FORBIDDEN_WORDS);
 		}
 		
 		Message message = new Message().withContent(chatMessage)
