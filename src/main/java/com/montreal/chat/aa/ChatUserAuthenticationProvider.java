@@ -4,6 +4,10 @@ import static com.montreal.chat.common.Constants.EMPTY_STRING;
 import static com.montreal.chat.util.Utils.stringToMap;
 import static java.util.Collections.emptyList;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +28,16 @@ import com.montreal.chat.view.dto.ChatUserDTO;
 @Component
 public class ChatUserAuthenticationProvider extends AbstractUserDetailsAuthenticationProvider {
 
+	private static final String CHAT_EMAIL_FROM = "infotisolutions@gmail.com";
+
 	@Autowired
 	UserService userService;
 
 	@Autowired
 	Environment env;
+	
+	  DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+	  DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
 	@Override
 	protected void additionalAuthenticationChecks(UserDetails userDetails,
@@ -56,8 +65,9 @@ public class ChatUserAuthenticationProvider extends AbstractUserDetailsAuthentic
 			return null;
 		}
 		if (details.getId() == null) {
-			EmailSenderUtil.sendEmail("infotisolutions@gmail.com", "infotisolutions@gmail.com",
-					"Sending with SendGrid is Fun", "text/plain", "and easy to do anywhere, even with Java",
+			LocalDateTime dt = LocalDateTime.now();
+			EmailSenderUtil.sendEmail(CHAT_EMAIL_FROM, userDto.getEmail(),
+					"Cadastro/Login Detectado", "text/plain", "Foi detectado um login utilizando este e-mail juntamente com o CPF: " + userDto.getCpf() + " as " + dt.format(dateFormatter) + "na data " + dt.format(timeFormatter) ,
 					env.getProperty("SENDGRID_API_KEY"));
 		}
 		((UsernamePasswordAuthenticationToken) authentication).setDetails(userDto);
